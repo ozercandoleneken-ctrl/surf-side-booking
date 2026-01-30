@@ -1,9 +1,9 @@
 
 import React, { useState, useCallback, useMemo } from 'react';
 import { UserData, AppState } from './types';
-import BookingFlow from './components/BookingFlow';
-import AdminDashboard from './components/AdminDashboard';
-import Login from './components/Login';
+import BookingFlow from './BookingFlow';
+import AdminDashboard from './AdminDashboard';
+import Login from './Login';
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>({
@@ -14,7 +14,6 @@ const App: React.FC = () => {
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  // Wix gibi platformlarda gömülü (iframe) kullanım için URL parametresini kontrol et
   const isEmbedded = useMemo(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -54,7 +53,6 @@ const App: React.FC = () => {
 
   return (
     <div className={`min-h-screen flex flex-col ${isEmbedded ? 'bg-transparent' : 'bg-slate-50'} font-sans`}>
-      {/* Navigation Header - Gömülü modda gizlenir, sadece admin panelindeyken veya ana sitedeyken görünür */}
       {!isEmbedded && (
         <header className="bg-white border-b border-slate-200 px-4 md:px-6 py-2.5 md:py-4 flex items-center justify-between sticky top-0 z-50 shadow-sm">
           <div className="flex items-center space-x-2 md:space-x-3">
@@ -85,9 +83,7 @@ const App: React.FC = () => {
         </header>
       )}
 
-      {/* Main Content */}
       <main className={`flex-1 flex flex-col items-center ${isEmbedded ? 'p-2 md:p-4' : 'p-3 md:p-8'}`}>
-        {/* Wix gibi platformlarda Admin paneline gizli geçiş butonu (Sadece gömülü moddaysak görünür) */}
         {isEmbedded && appState.view === 'user' && appState.step === 1 && (
           <button 
             onClick={toggleView}
@@ -101,7 +97,7 @@ const App: React.FC = () => {
         {appState.view === 'user' ? (
           <div className="w-full max-w-4xl">
             {appState.step !== 3 && (
-              <div className={`text-center mb-6 md:mb-10 animate-in fade-in slide-in-from-top-2 duration-700`}>
+              <div className={`text-center mb-6 md:mb-10`}>
                 <h1 className="text-xl md:text-4xl font-black text-slate-900 tracking-tighter uppercase leading-tight">
                   {appState.step === 1 ? 'Rezervasyon Bilgileri' : 'Aktivite Seçimi'}
                 </h1>
@@ -136,7 +132,6 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {/* Footer - Gömülü modda gizlenir */}
       {!isEmbedded && (
         <footer className="py-4 md:py-6 text-center text-slate-400 text-[8px] md:text-[10px] font-bold uppercase tracking-widest border-t border-slate-200 bg-white">
           &copy; {new Date().getFullYear()} Surf Side Urla. Tüm hakları saklıdır.
