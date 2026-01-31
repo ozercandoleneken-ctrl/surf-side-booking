@@ -24,8 +24,12 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ step, userData, onStep1Submit
   const [instructorSettings, setInstructorSettings] = useState<InstructorSetting[]>([]);
 
   useEffect(() => {
-    setExistingBookings(getBookings());
-    setInstructorSettings(getInstructorSettings());
+    const initData = async () => {
+      const [b, s] = await Promise.all([getBookings(), getInstructorSettings()]);
+      setExistingBookings(b);
+      setInstructorSettings(s);
+    };
+    if (step === 2) initData();
   }, [step]);
 
   const handleStep1Submit = (e: React.FormEvent) => {
@@ -38,7 +42,7 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ step, userData, onStep1Submit
     
     setIsSubmitting(true);
     const newBooking: Booking = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: '', // Firebase id oluşturacak
       user: userData,
       activity: selectedActivity,
       date: selectedDate,
@@ -48,11 +52,15 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ step, userData, onStep1Submit
       createdAt: Date.now()
     };
 
-    setTimeout(() => {
-      saveBooking(newBooking);
+    try {
+      await saveBooking(newBooking);
       setIsSubmitting(false);
       onComplete();
-    }, 800);
+    } catch (error) {
+      console.error("Booking error:", error);
+      alert("Bir hata oluştu, lütfen tekrar deneyin.");
+      setIsSubmitting(false);
+    }
   };
 
   const getSlotAvailability = (date: string, time: string, dur: number) => {

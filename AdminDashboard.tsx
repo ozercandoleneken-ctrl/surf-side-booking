@@ -1,11 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
+import { onSnapshot, collection, query, orderBy, limit } from 'firebase/firestore';
+import { db } from './firebase';
 import { Booking, BookingStatus, ActivityType, LogEntry } from './types';
 import { 
-  getBookings, updateBookingStatus, deleteBooking, 
+  updateBookingStatus, deleteBooking, 
   updateBookingInstructor, saveBooking, updateBooking,
   getInstructorSettings, saveInstructorSettings, InstructorSetting,
-  getLogs, logNotificationSent
+  logNotificationSent
 } from './storage';
 import { TIME_SLOTS, formatFullDateTurkish, ACTIVITIES } from './constants';
 
@@ -16,33 +18,45 @@ const AdminDashboard: React.FC = () => {
   const [scheduleDate, setScheduleDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<{ instructor: string, time: string } | null>(null);
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
   const [instructorSettings, setInstructorSettings] = useState<InstructorSetting[]>([]);
   const [manualFormData, setManualFormData] = useState({ fullName: '', phone: '', activity: ActivityType.KITESURF, duration: 1 as 1 | 2 });
-  const [newInstructorName, setNewInstructorName] = useState('');
-  const [editingInstructorIndex, setEditingInstructorIndex] = useState<number | null>(null);
-  const [tempInstructorName, setTempInstructorName] = useState('');
-
-  const loadData = () => {
-    const allBookings = getBookings().sort((a, b) => b.createdAt - a.createdAt);
-    setBookings(allBookings);
-    setInstructorSettings(getInstructorSettings());
-    setLogs(getLogs());
-  };
 
   useEffect(() => {
-    loadData();
+    // Bookings Real-time Listener
+    const qBookings = query(collection(db, 'bookings'), orderBy('createdAt', 'desc'));
+    const unsubBookings = onSnapshot(qBookings, (snapshot) => {
+      const bData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking));
+      setBookings(bData);
+    });
+
+    // Logs Real-time Listener
+    const qLogs = query(collection(db, 'logs'), orderBy('timestamp', 'desc'), limit(100));
+    const unsubLogs = onSnapshot(qLogs, (snapshot) => {
+      const lData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LogEntry));
+      setLogs(lData);
+    });
+
+    // Instructor Settings (Once or Real-time)
+    const loadSettings = async () => {
+      const s = await getInstructorSettings();
+      setInstructorSettings(s);
+    };
+    loadSettings();
+
+    return () => {
+      unsubBookings();
+      unsubLogs();
+    };
   }, []);
 
-  const sendWhatsAppConfirmation = (booking: Booking) => {
+  const sendWhatsAppConfirmation = async (booking: Booking) => {
     const phone = booking.user.phone.replace(/\D/g, '');
     const formattedPhone = phone.startsWith('0') ? '9' + phone : phone.startsWith('90') ? phone : '90' + phone;
     const message = `Merhaba ${booking.user.fullName}, Surf Side Urla'daki ${booking.activity} rezervasyonunuz ${booking.date} tarihinde saat ${booking.time} için onaylanmıştır. Görüşmek üzere! 🏄‍♂️🤙`;
     window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`, '_blank');
-    logNotificationSent(booking, 'WhatsApp');
-    loadData();
+    await logNotificationSent(booking, 'WhatsApp');
   };
 
   const changeDate = (days: number) => {
@@ -51,20 +65,17 @@ const AdminDashboard: React.FC = () => {
     setScheduleDate(d.toISOString().split('T')[0]);
   };
 
-  const handleStatusChange = (id: string, status: BookingStatus) => {
-    updateBookingStatus(id, status);
-    loadData();
+  const handleStatusChange = async (id: string, status: BookingStatus) => {
+    await updateBookingStatus(id, status);
   };
 
-  const handleInstructorChange = (id: string, instructorName: string, booking: Booking) => {
-    updateBookingInstructor(id, instructorName);
-    loadData();
+  const handleInstructorChange = async (id: string, instructorName: string, booking: Booking) => {
+    await updateBookingInstructor(id, instructorName);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm('Silmek istediğinize emin misiniz?')) {
-      deleteBooking(id);
-      loadData();
+      await deleteBooking(id);
     }
   };
 
@@ -73,11 +84,11 @@ const AdminDashboard: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleManualSubmit = (e: React.FormEvent) => {
+  const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSlot) return;
     const newBooking: Booking = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: '',
       user: { fullName: manualFormData.fullName, phone: manualFormData.phone, email: 'manuel@kayit.com' },
       activity: manualFormData.activity,
       date: scheduleDate,
@@ -87,16 +98,14 @@ const AdminDashboard: React.FC = () => {
       instructorName: selectedSlot.instructor,
       createdAt: Date.now()
     };
-    saveBooking(newBooking);
-    loadData();
+    await saveBooking(newBooking);
     setIsModalOpen(false);
   };
 
-  const handleEditSubmit = (e: React.FormEvent) => {
+  const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingBooking) {
-      updateBooking(editingBooking);
-      loadData();
+      await updateBooking(editingBooking);
       setIsEditModalOpen(false);
     }
   };

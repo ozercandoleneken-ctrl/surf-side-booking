@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { UserData, AppState } from './types';
 import BookingFlow from './BookingFlow';
 import AdminDashboard from './AdminDashboard';
@@ -13,6 +13,14 @@ const App: React.FC = () => {
   });
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  // URL parametrelerini kontrol et (Embed ve Doğrudan Panel Girişi için)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('panel') === 'admin' || params.get('view') === 'admin') {
+      setAppState(prev => ({ ...prev, view: 'admin' }));
+    }
+  }, []);
 
   const isEmbedded = useMemo(() => {
     if (typeof window !== 'undefined') {
@@ -84,16 +92,6 @@ const App: React.FC = () => {
       )}
 
       <main className={`flex-1 flex flex-col items-center ${isEmbedded ? 'p-2 md:p-4' : 'p-3 md:p-8'}`}>
-        {isEmbedded && appState.view === 'user' && appState.step === 1 && (
-          <button 
-            onClick={toggleView}
-            className="fixed bottom-4 right-4 z-50 w-8 h-8 bg-white/20 hover:bg-white/80 backdrop-blur shadow text-slate-300 hover:text-blue-600 rounded-full flex items-center justify-center transition-all opacity-30 hover:opacity-100"
-            title="Yönetici Girişi"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-          </button>
-        )}
-
         {appState.view === 'user' ? (
           <div className="w-full max-w-4xl">
             {appState.step !== 3 && (
