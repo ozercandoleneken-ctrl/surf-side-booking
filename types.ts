@@ -39,7 +39,8 @@ export interface LogEntry {
 }
 
 export interface AppState {
-  view: 'user' | 'admin';
+  // Added 'report' to the allowed values for view to fix type comparison errors in App.tsx
+  view: 'user' | 'admin' | 'report';
   step: 1 | 2 | 3; // 3 is success
   userData: UserData | null;
 }

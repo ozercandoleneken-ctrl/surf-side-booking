@@ -47,7 +47,7 @@ export const ACTIVITIES = [
 ];
 
 export const TIME_SLOTS = [
-  '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00'
+  '06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00'
 ];
 
 export const INSTRUCTORS = [
@@ -58,12 +58,23 @@ export const INSTRUCTORS = [
   'Ata'
 ];
 
+/**
+ * Tarihi yerel saat dilimine göre YYYY-MM-DD formatında döner.
+ * toISOString() metodunun neden olduğu tarih kaymasını engeller.
+ */
+export const formatDateYYYYMMDD = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export const getNext7Days = () => {
   const days = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date();
     d.setDate(d.getDate() + i);
-    days.push(d.toISOString().split('T')[0]);
+    days.push(formatDateYYYYMMDD(d));
   }
   return days;
 };
@@ -73,7 +84,6 @@ export const getCalendarMonthDays = (date: Date) => {
   const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0);
   
   const days = [];
-  // Fill initial padding
   const startPadding = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
   for (let i = 0; i < startPadding; i++) {
     days.push(null);
@@ -88,13 +98,13 @@ export const getCalendarMonthDays = (date: Date) => {
 
 export const formatDateDisplay = (dateStr: string) => {
   if (!dateStr) return '';
-  const d = new Date(dateStr);
+  const d = new Date(dateStr + 'T00:00:00'); // Saat dilimi karmaşasını önlemek için T00:00:00 ekliyoruz
   return d.toLocaleDateString('tr-TR', { weekday: 'short', day: 'numeric', month: 'short' });
 };
 
 export const formatFullDateTurkish = (dateStr: string) => {
   if (!dateStr) return '';
-  const d = new Date(dateStr);
+  const d = new Date(dateStr + 'T00:00:00');
   return d.toLocaleDateString('tr-TR', { 
     day: 'numeric', 
     month: 'long', 

@@ -4,7 +4,6 @@ import {
   addDoc, 
   getDocs, 
   updateDoc, 
-  deleteDoc, 
   doc, 
   query, 
   orderBy, 
@@ -27,23 +26,27 @@ export interface InstructorSetting {
 export const getBookings = async (): Promise<Booking[]> => {
   const q = query(collection(db, BOOKINGS_COL), orderBy('createdAt', 'desc'));
   const snapshot = await getDocs(q);
-  return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Booking));
+  return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Booking));
 };
 
 export const getLogs = async (): Promise<LogEntry[]> => {
   const q = query(collection(db, LOGS_COL), orderBy('timestamp', 'desc'), limit(100));
   const snapshot = await getDocs(q);
-  return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as LogEntry));
+  return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as LogEntry));
 };
 
 const addLog = async (type: LogEntry['type'], bookingId: string, userName: string, details: string) => {
-  await addDoc(collection(db, LOGS_COL), {
-    timestamp: Date.now(),
-    type,
-    bookingId,
-    userName,
-    details
-  });
+  try {
+    await addDoc(collection(db, LOGS_COL), {
+      timestamp: Date.now(),
+      type,
+      bookingId,
+      userName,
+      details
+    });
+  } catch (e) {
+    console.warn("Log yazma hatası:", e);
+  }
 };
 
 export const logNotificationSent = async (booking: Booking, channel: string) => {
@@ -59,6 +62,7 @@ export const saveBooking = async (booking: Booking) => {
 
 export const updateBooking = async (updatedBooking: Booking) => {
   const { id, ...data } = updatedBooking;
+  if (!id) throw new Error("ID eksik");
   const docRef = doc(db, BOOKINGS_COL, id);
   await updateDoc(docRef, data as any);
   await addLog('DÜZENLEME', id, updatedBooking.user.fullName, `Güncellendi: ${updatedBooking.date} ${updatedBooking.time}`);
@@ -69,7 +73,7 @@ export const updateBookingStatus = async (id: string, status: Booking['status'])
   const snap = await getDoc(docRef);
   if (snap.exists()) {
     await updateDoc(docRef, { status });
-    await addLog('DURUM_GÜNCELLEME', id, snap.data().user.fullName, `Durum: ${status}`);
+    await addLog('DURUM_GÜNCELLEME', id, snap.data().user?.fullName || 'Bilinmeyen', `Durum: ${status}`);
   }
 };
 
@@ -78,18 +82,7 @@ export const updateBookingInstructor = async (id: string, instructorName: string
   const snap = await getDoc(docRef);
   if (snap.exists()) {
     await updateDoc(docRef, { instructorName });
-    await addLog('EĞİTMEN_ATAMA', id, snap.data().user.fullName, `Eğitmen: ${instructorName}`);
-  }
-};
-
-export const deleteBooking = async (id: string) => {
-  const docRef = doc(db, BOOKINGS_COL, id);
-  const snap = await getDoc(docRef);
-  if (snap.exists()) {
-    const name = snap.data().user.fullName;
-    const act = snap.data().activity;
-    await deleteDoc(docRef);
-    await addLog('SİLME', id, name, `Silindi: ${act}`);
+    await addLog('EĞİTMEN_ATAMA', id, snap.data().user?.fullName || 'Bilinmeyen', `Eğitmen: ${instructorName}`);
   }
 };
 

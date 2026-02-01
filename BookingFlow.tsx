@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { UserData, ActivityType, Booking, BookingStatus } from './types';
-import { ACTIVITIES, TIME_SLOTS, getCalendarMonthDays, TURKISH_MONTHS } from './constants';
+import { ACTIVITIES, TIME_SLOTS, getCalendarMonthDays, TURKISH_MONTHS, formatDateYYYYMMDD } from './constants';
 import { saveBooking, getBookings, getInstructorSettings, InstructorSetting } from './storage';
 
 interface BookingFlowProps {
@@ -23,26 +23,76 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ step, userData, onStep1Submit
   const [existingBookings, setExistingBookings] = useState<Booking[]>([]);
   const [instructorSettings, setInstructorSettings] = useState<InstructorSetting[]>([]);
 
+  const refreshData = async () => {
+    const [b, s] = await Promise.all([getBookings(), getInstructorSettings()]);
+    setExistingBookings(b);
+    setInstructorSettings(s);
+  };
+
   useEffect(() => {
-    const initData = async () => {
-      const [b, s] = await Promise.all([getBookings(), getInstructorSettings()]);
-      setExistingBookings(b);
-      setInstructorSettings(s);
-    };
-    if (step === 2) initData();
+    if (step === 2) refreshData();
   }, [step]);
 
   const handleStep1Submit = (e: React.FormEvent) => {
     e.preventDefault();
-    onStep1Submit(formData);
+    const cleanData = {
+      fullName: formData.fullName.trim(),
+      phone: formData.phone.trim(),
+      email: formData.email.trim()
+    };
+
+    if (!cleanData.fullName || !cleanData.phone || !cleanData.email) {
+      alert("Lütfen tüm zorunlu alanları eksiksiz doldurunuz.");
+      return;
+    }
+
+    onStep1Submit(cleanData);
+  };
+
+  const getSlotAvailability = (date: string, time: string, dur: number, currentBookings: Booking[]) => {
+    if (!date || !time || !selectedActivity) return true;
+    const qualifiedInstructors = instructorSettings.filter(inst => 
+      inst.specialties.includes(selectedActivity)
+    );
+    const totalCapacity = qualifiedInstructors.length;
+    if (totalCapacity === 0) return false;
+
+    const startH = parseInt(time.split(':')[0]);
+    const endH = startH + dur;
+
+    for (let h = startH; h < endH; h++) {
+      const busyQualifiedCount = currentBookings.filter(b => {
+        if (b.date !== date || b.status !== BookingStatus.CONFIRMED || !b.instructorName) return false;
+        const isQualified = qualifiedInstructors.some(qi => qi.name === b.instructorName);
+        if (!isQualified) return false;
+        const bStart = parseInt(b.time.split(':')[0]);
+        const bEnd = bStart + b.duration;
+        return h >= bStart && h < bEnd;
+      }).length;
+      if (busyQualifiedCount >= totalCapacity) return false;
+    }
+    return true;
   };
 
   const handleFinalSubmit = async () => {
     if (!userData || !selectedActivity || !selectedDate || !selectedTime) return;
     
     setIsSubmitting(true);
+    
+    // Final check before saving to avoid race conditions
+    const latestBookings = await getBookings();
+    const stillAvailable = getSlotAvailability(selectedDate, selectedTime, duration, latestBookings);
+    
+    if (!stillAvailable) {
+      alert("Üzgünüz, seçtiğiniz saat dilimi az önce doldu. Lütfen başka bir saat seçiniz.");
+      await refreshData();
+      setIsSubmitting(false);
+      setSelectedTime('');
+      return;
+    }
+
     const newBooking: Booking = {
-      id: '', // Firebase id oluşturacak
+      id: '',
       user: userData,
       activity: selectedActivity,
       date: selectedDate,
@@ -63,38 +113,6 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ step, userData, onStep1Submit
     }
   };
 
-  const getSlotAvailability = (date: string, time: string, dur: number) => {
-    if (!date || !time || !selectedActivity) return true;
-    const start = parseInt(time);
-    const end = start + dur;
-
-    const qualifiedInstructors = instructorSettings.filter(inst => 
-      inst.specialties.includes(selectedActivity)
-    );
-    
-    const capacity = qualifiedInstructors.length;
-
-    for (let h = start; h < end; h++) {
-      const busyQualifiedCount = existingBookings.filter(b => {
-        if (b.date !== date || b.status !== BookingStatus.CONFIRMED) return false;
-        
-        if (b.instructorName) {
-          const isAmongQualified = qualifiedInstructors.some(qi => qi.name === b.instructorName);
-          if (!isAmongQualified) return false;
-        } else {
-          if (b.activity !== selectedActivity) return false;
-        }
-
-        const bStart = parseInt(b.time);
-        const bEnd = bStart + b.duration;
-        return h >= bStart && h < bEnd;
-      }).length;
-
-      if (busyQualifiedCount >= capacity) return false;
-    }
-    return true;
-  };
-
   const calendarDays = useMemo(() => getCalendarMonthDays(calendarDate), [calendarDate]);
 
   if (step === 1) {
@@ -104,7 +122,9 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ step, userData, onStep1Submit
           <h2 className="text-lg md:text-2xl font-black text-slate-900 mb-4 md:mb-6 uppercase tracking-tighter">Kişisel Bilgiler</h2>
           <form onSubmit={handleStep1Submit} className="space-y-3 md:space-y-4">
             <div>
-              <label className="block text-[10px] md:text-xs font-bold text-slate-700 mb-1 uppercase tracking-widest">Ad Soyad</label>
+              <label className="block text-[10px] md:text-xs font-bold text-slate-700 mb-1 uppercase tracking-widest">
+                Ad Soyad <span className="text-rose-500">*</span>
+              </label>
               <input
                 required
                 type="text"
@@ -115,7 +135,9 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ step, userData, onStep1Submit
               />
             </div>
             <div>
-              <label className="block text-[10px] md:text-xs font-bold text-slate-700 mb-1 uppercase tracking-widest">Telefon</label>
+              <label className="block text-[10px] md:text-xs font-bold text-slate-700 mb-1 uppercase tracking-widest">
+                Telefon <span className="text-rose-500">*</span>
+              </label>
               <input
                 required
                 type="tel"
@@ -126,7 +148,9 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ step, userData, onStep1Submit
               />
             </div>
             <div>
-              <label className="block text-[10px] md:text-xs font-bold text-slate-700 mb-1 uppercase tracking-widest">E-posta</label>
+              <label className="block text-[10px] md:text-xs font-bold text-slate-700 mb-1 uppercase tracking-widest">
+                E-posta <span className="text-rose-500">*</span>
+              </label>
               <input
                 required
                 type="email"
@@ -143,6 +167,9 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ step, userData, onStep1Submit
               Devam Et
             </button>
           </form>
+          <p className="mt-4 text-[9px] text-slate-400 text-center font-medium uppercase tracking-tighter">
+            <span className="text-rose-500">*</span> İşaretli alanların doldurulması zorunludur.
+          </p>
         </div>
       </div>
     );
@@ -206,16 +233,17 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ step, userData, onStep1Submit
                      </div>
                      <div className="grid grid-cols-7 gap-1">
                         {calendarDays.map((day, idx) => {
-                          const dateString = day?.toISOString().split('T')[0];
+                          const dateString = day ? formatDateYYYYMMDD(day) : '';
                           const isSelected = selectedDate === dateString;
-                          const isToday = dateString === new Date().toISOString().split('T')[0];
+                          const todayStr = formatDateYYYYMMDD(new Date());
+                          const isToday = dateString === todayStr;
                           const isPast = day && day < new Date(new Date().setHours(0,0,0,0));
 
                           return (
                             <button
                               key={idx}
                               disabled={!day || isPast}
-                              onClick={() => day && setSelectedDate(dateString!)}
+                              onClick={() => day && setSelectedDate(dateString)}
                               className={`aspect-square flex items-center justify-center text-[10px] md:text-sm font-bold rounded-lg md:rounded-xl transition-all relative ${
                                 isSelected 
                                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 z-10 scale-105' 
@@ -256,7 +284,7 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ step, userData, onStep1Submit
                   <label className="block text-[8px] md:text-sm font-black text-slate-700 mb-2 md:mb-4 uppercase tracking-widest">Müsait Saatler</label>
                   <div className="grid grid-cols-4 sm:grid-cols-3 gap-1.5 md:gap-3">
                     {TIME_SLOTS.map(slot => {
-                      const isAvailable = getSlotAvailability(selectedDate, slot, duration);
+                      const isAvailable = getSlotAvailability(selectedDate, slot, duration, existingBookings);
                       return (
                         <button
                           key={slot}

@@ -3,10 +3,11 @@ import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { UserData, AppState } from './types';
 import BookingFlow from './BookingFlow';
 import AdminDashboard from './AdminDashboard';
+import DailyReportView from './DailyReportView';
 import Login from './Login';
 
 const App: React.FC = () => {
-  const [appState, setAppState] = useState<AppState>({
+  const [appState, setAppState] = useState<AppState & { reportDate?: string }>({
     view: 'user',
     step: 1,
     userData: null
@@ -14,10 +15,15 @@ const App: React.FC = () => {
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  // URL parametrelerini kontrol et (Embed ve Doğrudan Panel Girişi için)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('panel') === 'admin' || params.get('view') === 'admin') {
+    const viewParam = params.get('view');
+    const dateParam = params.get('date');
+
+    if (viewParam === 'report' && dateParam) {
+      // Fixed: Removed 'as any' as 'report' is now a valid member of AppState.view
+      setAppState(prev => ({ ...prev, view: 'report', reportDate: dateParam }));
+    } else if (params.get('panel') === 'admin' || viewParam === 'admin') {
       setAppState(prev => ({ ...prev, view: 'admin' }));
     }
   }, []);
@@ -59,16 +65,16 @@ const App: React.FC = () => {
     setAppState(prev => ({ ...prev, view: 'user' }));
   };
 
+  // Fixed error: This comparison is now valid since 'report' was added to AppState's view property in types.ts
+  if (appState.view === 'report' && appState.reportDate) {
+    return <DailyReportView date={appState.reportDate} />;
+  }
+
   return (
     <div className={`min-h-screen flex flex-col ${isEmbedded ? 'bg-transparent' : 'bg-slate-50'} font-sans`}>
       {!isEmbedded && (
         <header className="bg-white border-b border-slate-200 px-4 md:px-6 py-2.5 md:py-4 flex items-center justify-between sticky top-0 z-50 shadow-sm">
-          <div className="flex items-center space-x-2 md:space-x-3">
-            <img 
-              src="https://img.icons8.com/ios-filled/100/000000/surf-board.png" 
-              alt="Surf Side Logo" 
-              className="w-8 h-8 md:w-12 md:h-12 object-contain"
-            />
+          <div className="flex items-center">
             <span className="text-sm md:text-xl font-black text-slate-900 tracking-tighter uppercase">Surf Side Urla</span>
           </div>
           
